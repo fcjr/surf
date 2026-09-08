@@ -1,0 +1,9 @@
+.build/
+Surf.xcodeproj/
+dist/
+.DS_Store
+.env
+.env.*
+*.p12
+*.p8
+*.pem

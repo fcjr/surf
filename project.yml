@@ -1,0 +1,87 @@
+name: Surf
+options:
+  bundleIdPrefix: com.leftshift
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+packages:
+  FluidAudio:
+    # Fork with provisional partial transcripts. Pin updates deliberately.
+    url: https://github.com/fcjr/FluidAudio
+    revision: 4d937231f0680eba9f45f95ed10f0e241bc60ab3
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: "2.9.6"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    # Overridden by CI from the release tag (APP_VERSION / APP_BUILD).
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Development builds need no Apple developer account.
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+  configs:
+    Release:
+      CODE_SIGN_IDENTITY: "Developer ID Application: Left Shift Logical, LLC (KNBPD99JQM)"
+      DEVELOPMENT_TEAM: KNBPD99JQM
+targets:
+  Surf:
+    type: application
+    platform: macOS
+    sources: [Surf]
+    dependencies:
+      - package: FluidAudio
+      - package: Sparkle
+    info:
+      path: Surf/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Surf
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.utilities
+        LSMinimumSystemVersion: "14.0"
+        LSUIElement: true
+        NSBluetoothAlwaysUsageDescription: Surf scans for and pairs Apple TV remotes.
+        NSMicrophoneUsageDescription: Surf transcribes your speech while you hold the Siri button.
+        SUFeedURL: https://github.com/fcjr/surf/releases/latest/download/appcast.xml
+        SUEnableAutomaticChecks: true
+        SUPublicEDKey: FE7OE4tCGlyR8EROgHaMjpPH8DVzWOJ/Q/gBNY2QniQ=
+        NSHumanReadableCopyright: "Copyright 2026 Left Shift Logical, LLC"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.leftshift.surf
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: YES
+        SWIFT_STRICT_CONCURRENCY: minimal
+        SWIFT_OBJC_BRIDGING_HEADER: Surf/Touch/MultitouchSupport.h
+        CODE_SIGN_ENTITLEMENTS: Surf/Resources/Surf.entitlements
+  SurfTests:
+    type: bundle.unit-test
+    platform: macOS
+    # Compile the logic directly so tests never launch the app or request permissions.
+    sources:
+      - SurfTests
+      - Surf/Model
+      - Surf/Dictation
+      - Surf/HID/HeldActions.swift
+    dependencies:
+      - package: FluidAudio
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.leftshift.surf.tests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Surf:
+    build:
+      targets: { Surf: all, SurfTests: [test] }
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [SurfTests]
+    archive:
+      config: Release

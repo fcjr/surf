@@ -1,0 +1,37 @@
+Surf
+Copyright 2026 Left Shift Logical, LLC
+Surf's original code is MIT licensed. See Surf.txt.
+
+Grumble
+https://github.com/fcjr/grumble
+Copyright 2026 Left Shift Logical, LLC
+The dictation controller and text injector were adapted for Surf from Grumble.
+The original code is Apache-2.0 licensed. See Grumble.txt.
+
+FluidAudio
+https://github.com/fcjr/FluidAudio
+Revision 4d937231f0680eba9f45f95ed10f0e241bc60ab3
+Apache-2.0. See FluidAudio.txt and the fastcluster.txt and VBx.txt notices.
+
+Sparkle 2.9.6
+https://github.com/sparkle-project/Sparkle
+See Sparkle.txt for its license and bundled third-party notices.
+
+Parakeet Unified EN 0.6B CoreML
+https://huggingface.co/FluidInference/parakeet-unified-en-0.6b-coreml
+CoreML conversion by FluidInference, based on NVIDIA Parakeet TDT 0.6B v2:
+https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2
+Model weights are licensed under Creative Commons Attribution 4.0 International:
+https://creativecommons.org/licenses/by/4.0/
+Surf downloads the model through FluidAudio and does not modify the weights.
+The model recognizes English. Model weights are downloaded separately, not bundled
+in Surf's app or source repository.
+
+OpenMultitouchSupport
+https://github.com/Kyome22/OpenMultitouchSupport
+Revision 15c6bb0c6a2d2858559493a28ab23f7ac58648a3
+Copyright (c) 2019 TakutoNakamura
+Surf's MultitouchSupport.h adapts the touch layout from
+Framework/OpenMultitouchSupportXCF/OpenMTInternal.h, using shorter field names
+and function-pointer declarations for runtime lookup.
+MIT license. See OpenMultitouchSupport.txt.

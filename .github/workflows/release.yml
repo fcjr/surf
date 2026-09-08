@@ -1,0 +1,144 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Install tools
+        run: brew install xcodegen create-dmg just
+
+      - name: Test before packaging
+        run: just test
+
+      - name: Import Developer ID certificate
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          umask 077
+          KEYCHAIN="$RUNNER_TEMP/build.keychain"
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          trap 'rm -f "$RUNNER_TEMP/cert.p12"' EXIT
+          printf '%s' "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S "apple-tool:,apple:" \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          identity=$(security find-identity -v -p codesigning "$KEYCHAIN" \
+            | awk '/Developer ID Application: Left Shift Logical, LLC \(KNBPD99JQM\)/ { print $2; exit }')
+          echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+
+      - name: Build signed DMG
+        run: |
+          export APP_VERSION="${GITHUB_REF_NAME#v}"
+          APP_BUILD="$(git rev-list --count HEAD)"
+          export APP_BUILD
+          just pkg
+
+      - name: Notarize
+        env:
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          umask 077
+          KEY_FILE="$RUNNER_TEMP/AuthKey.p8"
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s' "$APP_STORE_CONNECT_API_KEY" > "$KEY_FILE"
+          xcrun notarytool submit .build/Surf.dmg \
+            --key "$KEY_FILE" \
+            --key-id "$APP_STORE_CONNECT_KEY_ID" \
+            --issuer "$APP_STORE_CONNECT_ISSUER_ID" \
+            --wait
+          xcrun stapler staple .build/Surf.dmg
+          xcrun stapler staple .build/pkg/dmg/Surf.app
+
+      - name: Package Sparkle update and generate appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p .build/updates
+          ditto -c -k --keepParent .build/pkg/dmg/Surf.app \
+            ".build/updates/Surf-$VERSION.zip"
+          umask 077
+          KEY_FILE="$RUNNER_TEMP/sparkle_key"
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$KEY_FILE"
+          .build/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast \
+            .build/updates \
+            --ed-key-file "$KEY_FILE" \
+            --download-url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/"
+
+      # The appcast is uploaded with the release so Sparkle can fetch it from
+      # the stable releases/latest/download/appcast.xml URL (see SUFeedURL).
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cp .build/Surf.dmg ".build/Surf-$VERSION.dmg"
+          gh release create "$GITHUB_REF_NAME" \
+            ".build/Surf-$VERSION.dmg" \
+            ".build/Surf.dmg" \
+            ".build/updates/Surf-$VERSION.zip" \
+            ".build/updates/appcast.xml" \
+            --title "Surf $VERSION" \
+            --generate-notes
+
+      # Fill the cask template with this release's version + .dmg sha256 and
+      # push it to the tap, so `brew install --cask fcjr/fcjr/surf` tracks the
+      # release. The token comes from the releaser GitHub App, which is
+      # installed on fcjr/homebrew-fcjr.
+      - name: Mint tap token
+        id: tap-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.RELEASER_APP_ID }}
+          private-key: ${{ secrets.RELEASER_APP_PRIVATE_KEY }}
+          owner: fcjr
+          repositories: homebrew-fcjr
+
+      - name: Publish the Homebrew cask
+        env:
+          TAP_TOKEN: ${{ steps.tap-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          sha="$(shasum -a 256 ".build/Surf-$VERSION.dmg" | awk '{print $1}')"
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/fcjr/homebrew-fcjr.git" "$RUNNER_TEMP/tap"
+          mkdir -p "$RUNNER_TEMP/tap/Casks"
+          sed -e "s/VERSION_PLACEHOLDER/$VERSION/" -e "s/SHA256_PLACEHOLDER/$sha/" \
+            homebrew/surf.rb > "$RUNNER_TEMP/tap/Casks/surf.rb"
+          cd "$RUNNER_TEMP/tap"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/surf.rb
+          git diff --cached --quiet || git commit -m "surf $VERSION"
+          git push
+
+      - name: Remove signing credentials
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/sparkle_key"
+          if [ -f "$RUNNER_TEMP/build.keychain-db" ]; then
+            security delete-keychain "$RUNNER_TEMP/build.keychain"
+          fi
