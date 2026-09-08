@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="Surf/Resources/Assets.xcassets/AppIcon.appiconset/icon-256.png" alt="Surf app icon" width="128" height="128">
+</p>
+
 # Surf
 
 Use an Apple TV remote with your Mac.
@@ -6,13 +10,24 @@ Surf is a menu bar app for the Mac plugged into your TV. Swipe the remote to mov
 the pointer, click to select something, or hold Siri to dictate into a text field.
 You can leave the keyboard on the coffee table.
 
-## Try it
+## Install
 
-There isn't a packaged release yet. For now, see the [build instructions](docs/development.md).
-Development builds use ad hoc signing; no Apple developer account is needed.
+You'll need macOS 14 Sonoma or later. The remote code was developed with the
+third-generation USB-C Siri Remote. Other remote models still need testing.
 
-The project targets macOS 14 Sonoma and later. The remote code was developed with
-the third-generation USB-C Siri Remote. Other remote models still need testing.
+[Download Surf](https://github.com/fcjr/surf/releases/latest/download/Surf.dmg),
+open the DMG, and drag Surf into Applications. Then open Surf from Applications.
+It lives in your menu bar, so look there to pair your remote and change settings.
+
+If you use Homebrew, you can install it from Terminal:
+
+```sh
+brew install --cask fcjr/fcjr/surf
+open -a Surf
+```
+
+Surf checks for updates automatically. You can also click **Updates…** in its
+menu to check yourself.
 
 ## Pair your remote
 
